@@ -1,0 +1,112 @@
+{
+  "name": "СТЕНД 2 — Кнопки статусов в Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["callback_query"],
+        "additionalFields": {}
+      },
+      "id": "tg-trigger",
+      "name": "Telegram — нажата кнопка",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [-640, 0],
+      "webhookId": "stand-callbacks"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "b1", "name": "tg_token", "value": "PASTE_BOT_TOKEN", "type": "string"},
+            {"id": "b2", "name": "sheet_id", "value": "PASTE_GOOGLE_SHEET_ID", "type": "string"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "cfg2",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-420, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cq = $('Telegram — нажата кнопка').first().json.callback_query;\nconst [action, lead_id] = String(cq.data || '').split('|');\n\nconst MAP = {\n  work:  { status: 'В работе',     mark: '✅ Взял в работу' },\n  later: { status: 'Перезвонить',  mark: '💤 Перезвонить позже' },\n  deny:  { status: 'Отказ',        mark: '❌ Отказ' }\n};\nconst m = MAP[action] || { status: 'Неизвестно', mark: 'Статус обновлён' };\n\nconst who = [cq.from?.first_name, cq.from?.last_name].filter(Boolean).join(' ')\n         || (cq.from?.username ? '@' + cq.from.username : 'менеджер');\nconst ts = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });\n\n// К исходному тексту заявки дописываем строку статуса, кнопки убираем\nconst original = cq.message?.text || '';\nconst newText = original + `\\n\\n${m.mark} — ${who}, ${ts} МСК`;\n\nreturn [{ json: {\n  lead_id,\n  status: m.status,\n  who,\n  ts,\n  newText,\n  chat_id: cq.message.chat.id,\n  message_id: cq.message.message_id,\n  callback_query_id: cq.id\n} }];"
+      },
+      "id": "parse-cb",
+      "name": "Разобрать нажатие",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-200, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $('Config').first().json.tg_token }}/answerCallbackQuery",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ callback_query_id: $json.callback_query_id, text: 'Статус: ' + $json.status }) }}",
+        "options": {}
+      },
+      "id": "cb-ack",
+      "name": "Убрать часики у кнопки",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [40, -140]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $('Config').first().json.tg_token }}/editMessageText",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  chat_id: $json.chat_id,\n  message_id: $json.message_id,\n  text: $json.newText,\n  reply_markup: { inline_keyboard: [] }\n}) }}",
+        "options": {}
+      },
+      "id": "cb-edit",
+      "name": "Переписать сообщение",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [40, 0]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {"__rl": true, "value": "Лист1", "mode": "name"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $json.lead_id }}",
+            "Статус": "={{ $json.status }}",
+            "Кто взял": "={{ $json.who }}",
+            "Время реакции": "={{ $json.ts }}"
+          },
+          "matchingColumns": ["ID"],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "gs-update",
+      "name": "Google Таблица — обновить статус",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [40, 160]
+    }
+  ],
+  "connections": {
+    "Telegram — нажата кнопка": {"main": [[{"node": "Config", "type": "main", "index": 0}]]},
+    "Config": {"main": [[{"node": "Разобрать нажатие", "type": "main", "index": 0}]]},
+    "Разобрать нажатие": {"main": [[
+      {"node": "Убрать часики у кнопки", "type": "main", "index": 0},
+      {"node": "Переписать сообщение", "type": "main", "index": 0},
+      {"node": "Google Таблица — обновить статус", "type": "main", "index": 0}
+    ]]}
+  },
+  "settings": {"executionOrder": "v1"},
+  "pinData": {}
+}

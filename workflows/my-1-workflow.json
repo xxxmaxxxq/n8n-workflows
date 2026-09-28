@@ -1,0 +1,228 @@
+{
+  "name": "My 1 workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "Ты — профессиональный автор статей для канала Яндекс Дзена «AI для жизни и бизнеса».\n\nЗадача: с минимальным использованием интернета найти одну свежую, интересную и полезную тему для статьи на канал:\nhttps://dzen.ru/id/YOUR_DZEN_ID\n\nТематика канала:\nAI для жизни, бизнеса, работы, маркетинга, продаж, автоматизации, нейросетей, продуктивности, сервисов, предпринимателей и обычных пользователей.\n\nИспользуй интернет только для быстрой проверки актуальности темы. Не делай глубокий ресерч. Если интернет недоступен, выбери актуальную тему на основе общих знаний.\n\nВыбери тему, которая:\n- интересна широкой аудитории;\n- связана с практическим применением AI;\n- подходит для Яндекс Дзена;\n- не выглядит слишком технической;\n- может заинтересовать предпринимателей, фрилансеров, офисных сотрудников и людей, которые хотят упростить жизнь с помощью нейросетей.\n\nНапиши готовую статью объемом 1500-2000 слов.\n\nСтиль:\n- простой, живой, человеческий;\n- без канцелярита;\n- без сложных технических терминов;\n- без ощущения, что текст написал робот;\n- с понятными примерами из жизни и бизнеса;\n- с интригующим началом;\n- с плавной структурой;\n- с пользой для читателя.\n\nСтруктура:\n1. Цепляющий заголовок.\n2. Короткое интригующее вступление.\n3. Основная часть с понятными разделами.\n4. Практические примеры.\n5. Как применить это в жизни или бизнесе.\n6. Сильный вывод.\n\nВажно:\n- не упоминай, что ты искусственный интеллект;\n- не пиши «я нашел в интернете»;\n- не вставляй ссылки на источники;\n- не используй Markdown, HTML, таблицы и символы #, *, _;\n- не используй \\n, делай абзацы\n- верни только текст статьи."
+            }
+          ]
+        },
+        "builtInTools": {
+          "webSearch": {
+            "searchContextSize": "low"
+          }
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "2c08f405-5283-4e6d-923b-d4081111c059",
+      "name": "Article Writer",
+      "retryOnFail": false,
+      "maxTries": 2,
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1264,
+        0
+      ],
+      "id": "5219a676-faeb-4789-8283-1ac608e87992",
+      "name": "Send a text message",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "deepseek-v4-flash",
+          "mode": "list",
+          "cachedResultName": "DEEPSEEK-V4-FLASH"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Ты — финальный редактор текста для публикации в Яндекс Дзене.\n\nТвоя задача — подготовить окончательную версию статьи, которую можно сразу скопировать и вставить в Дзен.\n\nРаботай только с текстом предыдущего агента и списком партнёрских офферов ниже. Не выдумывай факты, продукты, комиссии и ссылки.\n\nДоступные партнёрские офферы:\n\n1. Название: Быстрые VPS/VDS\nПартнёрская программа: Хостинг-провайдер X\nКомиссия: 20% с первого платежа\nСсылка: https://example.com/aff-vps\nПодходит для тем про: VPS, VDS, серверы, хостинг\n\n2. Название: Облачный VPN-сервис\nПартнёрская программа: VPN-сервис Y\nКомиссия: 30% recurring\nСсылка: https://example.com/aff-vpn\nПодходит для тем про: безопасность, VPN, приватность\n\nЧто нужно сделать:\n1. Проверь логику, структуру, читаемость, орфографию и пунктуацию.\n2. Убери служебные комментарии, метаописания и фразы вроде «вот готовый текст».\n3. Убери Markdown, HTML и специальные символы форматирования: #, *, _, ```.\n4. Оставь обычные заголовки и обычные абзацы.\n5. Если один из партнёрских офферов действительно подходит по смыслу статьи, аккуратно добавь его в 1 естественное место.\n6. Не добавляй оффер, если он не подходит.\n7. Не меняй партнёрскую ссылку.\n8. Не добавляй больше одной рекламной вставки.\n9. Не пиши отдельный отчёт о выбранном оффере.\n10. Верни только чистый финальный текст статьи.\n\nТекст предыдущего агента:\n{{ $json.output[0].content[0].text }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        768,
+        0
+      ],
+      "id": "88365b66-0427-4450-adb2-1378be181650",
+      "name": "text",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Ты — SEO-редактор и литературный редактор статей для Яндекс Дзена.\n\nТвоя задача — получить статью от автора и улучшить её так, чтобы она была понятной, живой и удобной для чтения.\n\nРаботай только с полученным текстом. Не выдумывай факты и не добавляй новые данные без необходимости.\n\nСделай:\n1. Улучши заголовок, чтобы он был понятным, привлекательным и без чрезмерного кликбейта.\n2. Сохрани основной смысл статьи.\n3. Разбей текст на логичные разделы.\n4. Сделай подзаголовки простыми и человеческими.\n5. Убери повторы, лишнюю воду и затянутые фразы.\n6. Сделай абзацы короткими.\n7. Добавь списки только там, где они реально улучшают чтение.\n8. Не переспамливай ключевыми словами.\n9. Не упоминай ИИ как автора текста.\n10. Не добавляй партнёрские ссылки.\n11. Не используй Markdown, HTML, таблицы и символы #, *, _.\n\nНа выходе верни полностью готовую улучшенную статью.\n\nСтатья от автора:\n{{ $json.output[0].content[0].text }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        496,
+        0
+      ],
+      "id": "ac7bd6a1-30ea-467e-b081-3b3778472f3e",
+      "name": "SEO + редактор",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        16,
+        0
+      ],
+      "id": "e9cb7316-b833-4492-ac0e-41300f31ce67",
+      "name": "Telegram Trigger2",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.output[0].content[0].text;\nconst limit = 3950;\n\nconst chatId = $('Telegram Trigger2').item.json.message.chat.id;\n\nconst chunks = [];\nlet current = '';\n\nconst paragraphs = text.split(/\\n+/);\n\nfor (const paragraph of paragraphs) {\n  const part = paragraph.trim();\n\n  if (!part) continue;\n\n  if ((current + '\\n\\n' + part).length <= limit) {\n    current = current ? current + '\\n\\n' + part : part;\n  } else {\n    if (current) {\n      chunks.push({\n        json: {\n          chat_id: chatId,\n          text: current,\n        },\n      });\n    }\n\n    if (part.length <= limit) {\n      current = part;\n    } else {\n      for (let i = 0; i < part.length; i += limit) {\n        chunks.push({\n          json: {\n            chat_id: chatId,\n            text: part.slice(i, i + limit),\n          },\n        });\n      }\n\n      current = '';\n    }\n  }\n}\n\nif (current) {\n  chunks.push({\n    json: {\n      chat_id: chatId,\n      text: current,\n    },\n  });\n}\n\nreturn chunks;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        0
+      ],
+      "id": "56943943-d322-4c0a-b254-c7042deefbde",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "connections": {
+    "Article Writer": {
+      "main": [
+        [
+          {
+            "node": "SEO + редактор",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        []
+      ]
+    },
+    "text": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEO + редактор": {
+      "main": [
+        [
+          {
+            "node": "text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger2": {
+      "main": [
+        [
+          {
+            "node": "Article Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}

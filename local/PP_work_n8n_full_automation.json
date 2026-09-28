@@ -1,0 +1,101 @@
+[
+  {
+    "name": "PP_work — 1. Content Factory",
+    "nodes": [
+      {
+        "parameters": {"rule": {"interval": [{"field": "hours", "hoursInterval": 12}]}},
+        "id": "cf-schedule",
+        "name": "Schedule — 2 articles/day",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [-900, 0]
+      },
+      {
+        "parameters": {"jsCode": "return [{json:{run_id: crypto.randomUUID(), channel:'AI для жизни и бизнеса', dzen_url:'https://dzen.ru/id/YOUR_DZEN_ID', supabase_url:'https://sxmohmchavqpcszmrtv.supabase.co', chat_id:'REPLACE_WITH_TELEGRAM_CHAT_ID', created_at:new Date().toISOString()}}];"},
+        "id": "cf-config",
+        "name": "Config",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [-680, 0]
+      },
+      {
+        "parameters": {"method":"GET","url":"={{$json.supabase_url}}/rest/v1/articles?select=title,topic_key,title_normalized,content_hash,created_at,status&order=created_at.desc&limit=100","sendHeaders":true,"headerParameters":{"parameters":[{"name":"apikey","value":"={{$env.SUPABASE_SERVICE_ROLE_KEY}}"},{"name":"Authorization","value":"=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"}]},"options":{}},
+        "id":"cf-db-read","name":"Supabase — recent topics","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[-440,0]
+      },
+      {
+        "parameters": {"method":"GET","url":"https://news.google.com/rss/search?q=нейросети+OR+автоматизация+OR+ИИ&hl=ru&gl=RU&ceid=RU:ru","options":{"response":{"response":{"responseFormat":"text"}}}},
+        "id":"cf-trends","name":"Trends — Google News RSS","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[-440,220]
+      },
+      {
+        "parameters": {"mode":"mergeByIndex"},"id":"cf-merge","name":"Merge DB + trends","type":"n8n-nodes-base.merge","typeVersion":3.2,"position":[-200,80]
+      },
+      {
+        "parameters":{"modelId":{"__rl":true,"value":"gpt-5.4-mini","mode":"list"},"responses":{"values":[{"content":"=Ты — редактор-аналитик Дзена. Сгенерируй 12 свежих тем для канала «AI для жизни и бизнеса» на основе RSS-трендов и списка уже использованных тем. Не повторяй темы за последние 30 дней. Выбирай практичные темы для широкой аудитории. Верни только валидный JSON без markdown: {\"topics\":[{\"title\":\"...\",\"topic_key\":\"...\",\"angle\":\"...\",\"trend_source\":\"...\"}]}\n\nУже использованные записи:\n{{ JSON.stringify($('Supabase — recent topics').all().map(i=>i.json)) }}\n\nRSS-тренды:\n{{ $('Trends — Google News RSS').first().json.data || JSON.stringify($('Trends — Google News RSS').first().json) }}"}]},"options":{}},
+        "id":"cf-topic-ai","name":"Topic Agent — trends + uniqueness","type":"@n8n/n8n-nodes-langchain.openAi","typeVersion":2.3,"position":[40,80],"credentials":{"openAiApi":{"id":"DvKIYMkfaAw0ATe0","name":"OpenAI account 2"}}
+      },
+      {
+        "parameters":{"jsCode":"const raw=$json.output?.[0]?.content?.[0]?.text||$json.text||''; const clean=raw.replace(/^```json\\s*|```$/g,'').trim(); let x; try{x=JSON.parse(clean)}catch(e){x={topics:[{title:'Как использовать нейросети для экономии времени каждый день',topic_key:'ai-time-saving',angle:'Практическая инструкция',trend_source:'fallback'}]};} const topics=x.topics||[]; const pick=topics[Math.floor(Math.random()*Math.max(topics.length,1))]||topics[0]; return [{json:{...pick,run_id:$('Config').first().json.run_id,chat_id:$('Config').first().json.chat_id,supabase_url:$('Config').first().json.supabase_url,created_at:new Date().toISOString()}}];"},
+        "id":"cf-pick","name":"Pick unique topic","type":"n8n-nodes-base.code","typeVersion":2,"position":[280,80]
+      },
+      {
+        "parameters":{"modelId":{"__rl":true,"value":"gpt-5.4-mini","mode":"list"},"responses":{"values":[{"content":"=Ты — профессиональный автор статьи для Дзена. Напиши полезную статью 1500–2000 слов на тему: {{ $json.title }}. Угол подачи: {{ $json.angle }}. Стиль простой, живой, без канцелярита. Верни JSON без markdown: {\"title\":\"...\",\"content\":\"...\",\"keywords\":[\"...\"],\"affiliate_intent\":\"...\"}. Не выдумывай факты, не упоминай ИИ как автора."}]},"options":{}},
+        "id":"cf-writer","name":"Article Writer","type":"@n8n/n8n-nodes-langchain.openAi","typeVersion":2.3,"position":[520,80],"credentials":{"openAiApi":{"id":"DvKIYMkfaAw0ATe0","name":"OpenAI account 2"}}
+      },
+      {
+        "parameters":{"modelId":{"__rl":true,"value":"gpt-5.4-mini","mode":"list"},"responses":{"values":[{"content":"=Ты — SEO-редактор и QA. Получи статью ниже. Верни JSON без markdown: {\"title\":\"финальный заголовок\",\"content\":\"готовый текст\",\"description\":\"описание до 160 символов\",\"keywords\":[\"...\"],\"qa\":{\"facts_ok\":true,\"readability\":\"...\"}}. Сохрани смысл, убери повторы, сделай короткие абзацы и подзаголовки. Не добавляй неподтверждённые сведения.\n\n{{ $json.output?.[0]?.content?.[0]?.text || JSON.stringify($json) }}"}]},"options":{}},
+        "id":"cf-seo","name":"SEO + QA Agent","type":"@n8n/n8n-nodes-langchain.openAi","typeVersion":2.3,"position":[760,80],"credentials":{"openAiApi":{"id":"DvKIYMkfaAw0ATe0","name":"OpenAI account 2"}}
+      },
+      {
+        "parameters":{"modelId":{"__rl":true,"value":"gpt-5.4-mini","mode":"list"},"responses":{"values":[{"content":"=Ты — менеджер партнёрских офферов. Из текста статьи выбери максимум один релевантный оффер из списка. Если подходящего нет — affiliate_url оставь пустым. Не выдумывай ссылки. Верни JSON: {\"affiliate_name\":\"...\",\"affiliate_url\":\"...\",\"placement\":\"...\",\"disclosure\":\"Реклама\"}. Офферы: AI SaaS — https://example.com/ai?utm_source=dzen&utm_medium=article; VPS — https://example.com/vps?utm_source=dzen&utm_medium=article; VPN — https://example.com/vpn?utm_source=dzen&utm_medium=article.\n\nСтатья:\n{{ $json.output?.[0]?.content?.[0]?.text || JSON.stringify($json) }}"}]},"options":{}},
+        "id":"cf-aff","name":"Affiliate Selector + UTM","type":"@n8n/n8n-nodes-langchain.openAi","typeVersion":2.3,"position":[1000,80],"credentials":{"openAiApi":{"id":"DvKIYMkfaAw0ATe0","name":"OpenAI account 2"}}
+      },
+      {
+        "parameters":{"method":"GET","url":"=https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={{ encodeURIComponent($('Pick unique topic').first().json.title) }}&gsrnamespace=6&gsrlimit=5&prop=imageinfo&iiprop=url&iiurlwidth=1200&format=json","options":{}},
+        "id":"cf-images","name":"Images — Wikimedia Commons (3–5)","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[1000,300]
+      },
+      {
+        "parameters":{"mode":"mergeByIndex"},"id":"cf-final-merge","name":"Merge article + affiliate + images","type":"n8n-nodes-base.merge","typeVersion":3.2,"position":[1240,100]
+      },
+      {
+        "parameters":{"jsCode":"const topic=$('Pick unique topic').first().json; const seoRaw=$('SEO + QA Agent').first().json.output?.[0]?.content?.[0]?.text||''; const affRaw=$('Affiliate Selector + UTM').first().json.output?.[0]?.content?.[0]?.text||''; const parse=s=>{try{return JSON.parse(s.replace(/^```json\\s*|```$/g,'').trim())}catch(e){return {}}}; const seo=parse(seoRaw), aff=parse(affRaw); const pages=$json.query?.pages||{}; const images=Object.values(pages).map(p=>p.imageinfo?.[0]?.thumburl||p.imageinfo?.[0]?.url).filter(Boolean).slice(0,5); const title=seo.title||topic.title; let content=seo.content||seoRaw; if(aff.affiliate_url) content+='\\n\\n'+(aff.placement||'Полезный сервис по теме статьи:')+' '+aff.affiliate_url+'\\n'+(aff.disclosure||'Реклама'); const hash=Buffer.from(title+'|'+content).toString('base64').slice(0,64); return [{json:{run_id:topic.run_id,title,content,description:seo.description||'',keywords:seo.keywords||[],topic_key:topic.topic_key,title_normalized:title.toLowerCase().replace(/[^a-zа-я0-9]+/gi,' ').trim(),content_hash:hash,image_urls:images,status:'awaiting_approval',created_at:topic.created_at,chat_id:topic.chat_id,supabase_url:topic.supabase_url,affiliate_url:aff.affiliate_url||''}}];"},
+        "id":"cf-package","name":"Build article package","type":"n8n-nodes-base.code","typeVersion":2,"position":[1480,100]
+      },
+      {
+        "parameters":{"method":"POST","url":"={{$json.supabase_url}}/rest/v1/articles","sendHeaders":true,"headerParameters":{"parameters":[{"name":"apikey","value":"={{$env.SUPABASE_SERVICE_ROLE_KEY}}"},{"name":"Authorization","value":"=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"},{"name":"Prefer","value":"return=representation"}]},"sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{JSON.stringify($json)}}","options":{}},
+        "id":"cf-save","name":"Supabase — save draft","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[1720,100]
+      },
+      {
+        "parameters":{"jsCode":"const a=$('Build article package').first().json; const preview=a.content.slice(0,2500); return [{json:{chat_id:a.chat_id,text:'Новая статья на проверку\\n\\n'+a.title+'\\n\\n'+preview+'\\n\\nID: '+a.run_id+'\\n\\nДля подтверждения: /approve '+a.run_id+'\\nДля отклонения: /reject '+a.run_id+'\\nДля доработки: /revise '+a.run_id}}];"},
+        "id":"cf-preview","name":"Approval preview","type":"n8n-nodes-base.code","typeVersion":2,"position":[1960,100]
+      },
+      {"parameters":{"chatId":"={{$json.chat_id}}","text":"={{$json.text}}","additionalFields":{}},"id":"cf-telegram","name":"Telegram — approval request","type":"n8n-nodes-base.telegram","typeVersion":1.2,"position":[2200,100],"credentials":{"telegramApi":{"id":"rIVYVtqdOx6zlczs","name":"Telegram account"}}}
+    ],
+    "connections":{"Schedule — 2 articles/day":{"main":[[{"node":"Config","type":"main","index":0}]]},"Config":{"main":[[{"node":"Supabase — recent topics","type":"main","index":0},{"node":"Trends — Google News RSS","type":"main","index":0}]]},"Supabase — recent topics":{"main":[[{"node":"Merge DB + trends","type":"main","index":0}]]},"Trends — Google News RSS":{"main":[[{"node":"Merge DB + trends","type":"main","index":1}]]},"Merge DB + trends":{"main":[[{"node":"Topic Agent — trends + uniqueness","type":"main","index":0}]]},"Topic Agent — trends + uniqueness":{"main":[[{"node":"Pick unique topic","type":"main","index":0}]]},"Pick unique topic":{"main":[[{"node":"Article Writer","type":"main","index":0}]]},"Article Writer":{"main":[[{"node":"SEO + QA Agent","type":"main","index":0}]]},"SEO + QA Agent":{"main":[[{"node":"Affiliate Selector + UTM","type":"main","index":0}]]},"Affiliate Selector + UTM":{"main":[[{"node":"Merge article + affiliate + images","type":"main","index":0}]]},"Images — Wikimedia Commons (3–5)":{"main":[[{"node":"Merge article + affiliate + images","type":"main","index":1}]]},"Merge article + affiliate + images":{"main":[[{"node":"Build article package","type":"main","index":0}]]},"Build article package":{"main":[[{"node":"Supabase — save draft","type":"main","index":0}]]},"Supabase — save draft":{"main":[[{"node":"Approval preview","type":"main","index":0}]]},"Approval preview":{"main":[[{"node":"Telegram — approval request","type":"main","index":0}]]}},"active":false,"settings":{"executionOrder":"v1"},"pinData":{},"versionId":"pp-content-factory-v1","meta":{"templateCredsSetupCompleted":true},"tags":[]
+  },
+  {
+    "name":"PP_work — 2. Telegram approval + Playwright publish",
+    "nodes":[
+      {"parameters":{"updates":["message"],"additionalFields":{}},"id":"ap-trigger","name":"Telegram Trigger — commands","type":"n8n-nodes-base.telegramTrigger","typeVersion":1.5,"position":[-700,0],"credentials":{"telegramApi":{"id":"rIVYVtqdOx6zlczs","name":"Telegram account"}}},
+      {"parameters":{"jsCode":"const m=$json.message||{}; const text=m.text||''; const match=text.match(/^\\/(approve|reject|revise)\\s+([a-zA-Z0-9-]+)/); if(!match) return []; return [{json:{command:match[1],run_id:match[2],chat_id:m.chat.id,supabase_url:'https://sxmohmchavqpcszmrtv.supabase.co',user_id:m.from?.id}}];"},"id":"ap-parse","name":"Parse command + auth","type":"n8n-nodes-base.code","typeVersion":2,"position":[-460,0]},
+      {"parameters":{"method":"GET","url":"={{$json.supabase_url}}/rest/v1/articles?select=*&run_id=eq.{{$json.run_id}}&limit=1","sendHeaders":true,"headerParameters":{"parameters":[{"name":"apikey","value":"={{$env.SUPABASE_SERVICE_ROLE_KEY}}"},{"name":"Authorization","value":"=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"}]},"options":{}},"id":"ap-read","name":"Supabase — get article","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[-220,0]},
+      {"parameters":{"jsCode":"const cmd=$('Parse command + auth').first().json; const row=$json[0]||$json; if(cmd.command==='reject') return [{json:{...cmd,status:'rejected',message:'Статья отклонена: '+cmd.run_id}}]; if(cmd.command==='revise') return [{json:{...cmd,status:'revision_requested',message:'Статья отправлена на доработку: '+cmd.run_id}}]; return [{json:{...cmd,...row,status:'approved',message:'Статья подтверждена и передана в очередь публикации: '+cmd.run_id}}];"},"id":"ap-route","name":"Approve / reject / revise","type":"n8n-nodes-base.code","typeVersion":2,"position":[20,0]},
+      {"parameters":{"method":"PATCH","url":"={{$json.supabase_url}}/rest/v1/articles?run_id=eq.{{$json.run_id}}","sendHeaders":true,"headerParameters":{"parameters":[{"name":"apikey","value":"={{$env.SUPABASE_SERVICE_ROLE_KEY}}"},{"name":"Authorization","value":"=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"},{"name":"Content-Type","value":"application/json"}]},"sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{JSON.stringify({status:$json.status,updated_at:new Date().toISOString()})}}","options":{}},"id":"ap-status","name":"Supabase — update status","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[260,0]},
+      {"parameters":{"method":"POST","url":"={{$env.PLAYWRIGHT_PUBLISH_URL || 'https://YOUR-PLAYWRIGHT-SERVICE/publish'}}","sendHeaders":true,"sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{JSON.stringify({run_id:$json.run_id,title:$json.title,content:$json.content,image_urls:$json.image_urls})}}","options":{}},"id":"ap-playwright","name":"Playwright — publish to Dzen (external service)","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[500,140],"disabled":true},
+      {"parameters":{"jsCode":"return [{json:{chat_id:$('Parse command + auth').first().json.chat_id,text:$json.message||('Команда обработана: '+$json.status)}}];"},"id":"ap-msg","name":"Build Telegram result","type":"n8n-nodes-base.code","typeVersion":2,"position":[500,-60]},
+      {"parameters":{"chatId":"={{$json.chat_id}}","text":"={{$json.text}}","additionalFields":{}},"id":"ap-send","name":"Telegram — result","type":"n8n-nodes-base.telegram","typeVersion":1.2,"position":[740,-60],"credentials":{"telegramApi":{"id":"rIVYVtqdOx6zlczs","name":"Telegram account"}}}
+    ],
+    "connections":{"Telegram Trigger — commands":{"main":[[{"node":"Parse command + auth","type":"main","index":0}]]},"Parse command + auth":{"main":[[{"node":"Supabase — get article","type":"main","index":0}]]},"Supabase — get article":{"main":[[{"node":"Approve / reject / revise","type":"main","index":0}]]},"Approve / reject / revise":{"main":[[{"node":"Supabase — update status","type":"main","index":0},{"node":"Build Telegram result","type":"main","index":0}]]},"Supabase — update status":{"main":[[{"node":"Playwright — publish to Dzen (external service)","type":"main","index":0}]]},"Build Telegram result":{"main":[[{"node":"Telegram — result","type":"main","index":0}]]}},"active":false,"settings":{"executionOrder":"v1"},"pinData":{},"versionId":"pp-approval-v1","meta":{"templateCredsSetupCompleted":true},"tags":[]
+  },
+  {
+    "name":"PP_work — 3. Maintenance metrics + rewrites + crosspost",
+    "nodes":[
+      {"parameters":{"rule":{"interval":[{"field":"days","daysInterval":1}]}},"id":"mt-schedule","name":"Schedule — daily maintenance","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-700,0]},
+      {"parameters":{"method":"GET","url":"https://sxmohmchavqpcszmrtv.supabase.co/rest/v1/articles?select=*&status=eq.published&order=published_at.asc&limit=100","sendHeaders":true,"headerParameters":{"parameters":[{"name":"apikey","value":"={{$env.SUPABASE_SERVICE_ROLE_KEY}}"},{"name":"Authorization","value":"=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"}]},"options":{}},"id":"mt-read","name":"Supabase — published articles","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[-460,0]},
+      {"parameters":{"modelId":{"__rl":true,"value":"gpt-5.4-mini","mode":"list"},"responses":{"values":[{"content":"=Проанализируй опубликованные статьи и выбери максимум одну для обновления. Ориентируйся на низкие просмотры/CTR/клики, если метрик нет — выбери самую старую. Верни JSON без markdown: {\"action\":\"rewrite|none\",\"run_id\":\"...\",\"reason\":\"...\",\"new_title\":\"...\"}. Данные: {{JSON.stringify($json)}}"}]},"options":{}},"id":"mt-ai","name":"Performance Analyst + rewrite decision","type":"@n8n/n8n-nodes-langchain.openAi","typeVersion":2.3,"position":[-200,0],"credentials":{"openAiApi":{"id":"DvKIYMkfaAw0ATe0","name":"OpenAI account 2"}}},
+      {"parameters":{"jsCode":"const raw=$json.output?.[0]?.content?.[0]?.text||''; let x; try{x=JSON.parse(raw.replace(/^```json\\s*|```$/g,'').trim())}catch(e){x={action:'none'}}; return [{json:x}];"},"id":"mt-parse","name":"Parse maintenance decision","type":"n8n-nodes-base.code","typeVersion":2,"position":[40,0]},
+      {"parameters":{"method":"POST","url":"https://sxmohmchavqpcszmrtv.supabase.co/rest/v1/article_metrics","sendHeaders":true,"headerParameters":{"parameters":[{"name":"apikey","value":"={{$env.SUPABASE_SERVICE_ROLE_KEY}}"},{"name":"Authorization","value":"=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"}]},"sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{JSON.stringify({run_id:$json.run_id,action:$json.action,reason:$json.reason,checked_at:new Date().toISOString()})}}","options":{}},"id":"mt-save","name":"Supabase — save metrics decision","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[280,0]},
+      {"parameters":{"method":"POST","url":"={{$env.CROSSPOST_WEBHOOK_URL || 'https://YOUR-CROSSPOST-SERVICE/webhook'}}","sendHeaders":true,"sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{JSON.stringify($json)}}","options":{}},"id":"mt-crosspost","name":"Crosspost — external webhook","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[520,0],"disabled":true}
+    ],
+    "connections":{"Schedule — daily maintenance":{"main":[[{"node":"Supabase — published articles","type":"main","index":0}]]},"Supabase — published articles":{"main":[[{"node":"Performance Analyst + rewrite decision","type":"main","index":0}]]},"Performance Analyst + rewrite decision":{"main":[[{"node":"Parse maintenance decision","type":"main","index":0}]]},"Parse maintenance decision":{"main":[[{"node":"Supabase — save metrics decision","type":"main","index":0}]]},"Supabase — save metrics decision":{"main":[[{"node":"Crosspost — external webhook","type":"main","index":0}]]}},"active":false,"settings":{"executionOrder":"v1"},"pinData":{},"versionId":"pp-maintenance-v1","meta":{"templateCredsSetupCompleted":true},"tags":[]
+  }
+]

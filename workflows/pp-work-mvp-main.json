@@ -1,0 +1,1027 @@
+{
+  "name": "PP_work MVP - Main",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -1552,
+        160
+      ],
+      "id": "61521358-02d1-41b0-9ac2-7a1f00c760e0",
+      "name": "Telegram Trigger",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1552,
+        400
+      ],
+      "id": "dea8aa2b-a5e4-4d04-a6dd-8afbcd31a827",
+      "name": "Daily Schedule"
+    },
+    {
+      "parameters": {
+        "jsCode": "const m=$json.message||{}; const text=String(m.text||'').trim(); const a=text.match(/^\\/approve\\s+([A-Za-z0-9_-]+)$/i); return [{json:{run_id:Date.now().toString(),chat_id:m.chat?.id||'YOUR_TELEGRAM_CHAT_ID',topic:a?'':text.replace(/^\\/start\\s*/i,'').trim(),approval_id:a?a[1]:'',is_approval:Boolean(a),approver_user_id:m.from?.id||'',niche:'AI для жизни и бизнеса',offer_id:'YOUR_OFFER_ID'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1328,
+        272
+      ],
+      "id": "d7e52639-1926-42a0-a387-bd5aace283da",
+      "name": "Initialize Request"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "waMNGjtOcekThDcg",
+          "mode": "id",
+          "cachedResultUrl": "/workflow/waMNGjtOcekThDcg"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        -1392,
+        544
+      ],
+      "id": "d86a11ee-d1cf-4ba1-89e0-97853b646d9a",
+      "name": "Call Optional Trend Sources"
+    },
+    {
+      "parameters": {
+        "jsCode": "const base=$('Initialize Request').first().json; const a=Array.isArray($json)?$json[0]:$json; return [{json:{...base,topic:base.topic||a.topic||a.title||'Практическое применение AI'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1216,
+        544
+      ],
+      "id": "036c3e5b-f0d1-40ff-bb8d-776ef0552380",
+      "name": "Select Topic"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Исследуй тему только по проверяемым источникам. Верни JSON-объект FACTS, CLAIMS, USER_INTENT, OFFER_FIT, RISKS, source_urls. Не выдумывай. Тема: {{ $json.topic }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -1040,
+        544
+      ],
+      "id": "45c916a5-3f6a-4b1b-83d9-0a5e062ffe8a",
+      "name": "Research Agent",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Создай JSON-объект с title, dzen_article, telegram_post, vk_post, disclosure, source_urls, offer_id. Используй только подтвержденные факты. Не обещай доход или одобрение. Research: {{ $json.output?.[0]?.content?.[0]?.text || $json.text }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -768,
+        544
+      ],
+      "id": "2b769511-7c12-42bd-9642-f9653e114924",
+      "name": "Content Agent",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw=$json.output?.[0]?.content?.[0]?.text||$json.text||''; let d; try{d=JSON.parse(raw)}catch(e){d={title:'',dzen_article:raw,telegram_post:'',vk_post:'',disclosure:'',source_urls:[],offer_id:'',parse_error:e.message}} const b=$('Select Topic').first().json; const cid=b.run_id; const url='https://YOUR_OFFER_LANDING_PAGE/?utm_source=dzen&utm_medium=article&utm_campaign=ppwork_'+cid+'&utm_content='+cid; return [{json:{...b,...d,content_id:cid,tracking_url:url}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        544
+      ],
+      "id": "3ff9d06c-e26b-4479-86b6-108150cf16c4",
+      "name": "Normalize Draft And UTM"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/content_items",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer YOUR_API_KEY\",\"apikey\":\"YOUR_API_KEY\"}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({id:$json.content_id,title:$json.title,status:\"draft\",body:$json.dzen_article,source_urls:$json.source_urls||[],tracking_url:$json.tracking_url,offer_id:$json.offer_id}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -256,
+        544
+      ],
+      "id": "cc4f3c6f-8fda-4cca-a7f9-885835056e95",
+      "name": "Save Draft"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "rZ2ZqirDUDV2Bh7r",
+          "mode": "id",
+          "cachedResultUrl": "/workflow/rZ2ZqirDUDV2Bh7r"
+        },
+        "mode": "eachItem",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        -32,
+        544
+      ],
+      "id": "0b93bd7c-627b-4df4-9c9b-91de1d8ae73f",
+      "name": "Call Optional Media Agent"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Проверь факты, источники, рекламу, дисклеймер, UTM и правила оффера. Верни только JSON: status, score_0_100, factual_errors, unsupported_claims, duplicate_risks, platform_issues, disclosure_required, changes. qa_passed только без блокирующих проблем. Материал: {{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        128,
+        544
+      ],
+      "id": "69dec18b-a807-4e76-bc97-5d16822c7124",
+      "name": "QA Agent",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw=$json.output?.[0]?.content?.[0]?.text||$json.text||''; let q; try{q=JSON.parse(raw)}catch(e){q={status:'manual_review',changes:['Invalid QA JSON']}} const b=$('Normalize Draft And UTM').first().json; return [{json:{...b,qa_report:q,status:q.status==='qa_passed'?'qa_passed':'manual_review',text:q.status==='qa_passed'?'Материал прошел QA. Требуется ручное подтверждение: /approve '+b.content_id:'Материал заблокирован для ручной проверки.'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        544
+      ],
+      "id": "5a912f53-3616-46b1-895d-3d64199eaef1",
+      "name": "Normalize QA",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_approval }}",
+              "operation": "isTrue"
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1168,
+        272
+      ],
+      "id": "3e9b3ac7-919e-45ee-9379-da2d4507e4c2",
+      "name": "Approval Command?"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://YOUR_PROJECT.supabase.co/rest/v1/content_items?id=eq.'+$json.approval_id+'&limit=1 }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\":\"application/json\",\"apikey\":\"YOUR_API_KEY\",\"Authorization\":\"Bearer YOUR_API_KEY\"}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1056,
+        -128
+      ],
+      "id": "65877caf-defd-481f-8f16-6c11be44386a",
+      "name": "Fetch Content For Approval"
+    },
+    {
+      "parameters": {
+        "jsCode": "const req=$('Initialize Request').first().json; const r=Array.isArray($json)?$json[0]:$json; const ok=String(req.approver_user_id)==='YOUR_TELEGRAM_CHAT_ID'; return [{json:{...r,content_id:r.id||r.content_id||req.approval_id,chat_id:req.chat_id,approval_authorized:ok}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        -128
+      ],
+      "id": "6aa56035-a2e0-4844-a773-ac9528f7cc66",
+      "name": "Verify Approval Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.approval_authorized }}",
+              "operation": "isTrue"
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -688,
+        -128
+      ],
+      "id": "48b2c96b-0492-4c1f-a2f2-157177ffc0f0",
+      "name": "Approver Authorized?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "awaiting_approval"
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -528,
+        -288
+      ],
+      "id": "a3f37a87-c3b4-4d40-8704-cdf41c361897",
+      "name": "Content Awaiting Approval?"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{chat_id:$('Initialize Request').first().json.chat_id,text:'Команда отклонена: пользователь не авторизован.'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -624,
+        336
+      ],
+      "id": "3cb2a785-db50-47f9-840a-00142273c0c1",
+      "name": "Unauthorized Notice"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{chat_id:$('Initialize Request').first().json.chat_id,text:'Материал не имеет статуса awaiting_approval и не будет опубликован.'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        -48
+      ],
+      "id": "e92814c4-b62e-4a55-9d13-08fb6811c55a",
+      "name": "Invalid Approval Notice"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -448,
+        336
+      ],
+      "id": "72841c86-4613-48a4-b80a-2dd8ab1f61a3",
+      "name": "Notify Unauthorized Request",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -160,
+        -48
+      ],
+      "id": "809296a8-256c-42bd-bf8e-0e935f4861ff",
+      "name": "Notify Invalid Approval",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_DZEN_API_ENDPOINT/v1/publications",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer YOUR_DZEN_API_KEY\"}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({content_id:$json.content_id,title:$json.title,content:$json.body||$json.dzen_article,tracking_url:$json.tracking_url}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -320,
+        -336
+      ],
+      "id": "e34399e7-bbe6-4930-bf19-5c2a33408d8a",
+      "name": "Publish Dzen Via API"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.vk.com/method/wall.post",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer YOUR_VK_API_TOKEN\"}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({owner_id:\"YOUR_VK_GROUP_ID\",message:$json.vk_post||$json.body||$json.dzen_article,attachments:$json.tracking_url||\"\"}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        -336
+      ],
+      "id": "f4403b40-524c-4eb8-807e-ba132b855493",
+      "name": "Publish VK Via API"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Initialize Request').first().json.chat_id }}",
+        "text": "={{ $json.telegram_post||$json.body||$json.dzen_article }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        96,
+        -336
+      ],
+      "id": "4e070686-4636-49dc-82fc-9a559831b644",
+      "name": "Publish Telegram Mirror",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_ANALYTICS_API_ENDPOINT/v1/metrics",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer YOUR_ANALYTICS_API_KEY\"}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        288,
+        -336
+      ],
+      "id": "d821dab3-5378-4e29-b346-3714176d3990",
+      "name": "Fetch Metrics"
+    },
+    {
+      "parameters": {
+        "jsCode": "const a=Array.isArray($json)?$json:[$json];let v=0,c=0,l=0,r=0;for(const x of a){v+=Number(x.views||0);c+=Number(x.clicks||0);l+=Number(x.approved_actions||0);r+=Number(x.revenue||0)}return [{json:{chat_id:$('Initialize Request').first().json.chat_id,text:'CEO отчет: просмотры '+v+', клики '+c+', подтверждено '+l+', доход '+r+', CTR '+(v?c/v:0).toFixed(4)+', EPC '+(c?r/c:0).toFixed(2)}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        -336
+      ],
+      "id": "6db77d3b-c1ea-4e7b-b049-9805a85d0628",
+      "name": "Build CEO Report"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        656,
+        -336
+      ],
+      "id": "6471e193-3adf-4e52-acf6-2adb323881a6",
+      "name": "Send CEO Report",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/content_items",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\":\"application/json\",\"apikey\":\"YOUR_API_KEY\",\"Authorization\":\"Bearer YOUR_API_KEY\"}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({id:$json.content_id,status:\"awaiting_approval\",qa_report:$json.qa_report}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        912,
+        624
+      ],
+      "id": "7e34a188-8627-40b2-9ad9-f78e98ffb3f9",
+      "name": "Save Approval Queue",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id||\"YOUR_TELEGRAM_CHAT_ID\" }}",
+        "text": "={{ \"Материал прошел QA. Для публикации отправьте: /approve \"+$json.content_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        624
+      ],
+      "id": "462aa214-1306-4d11-abcc-9bdb0f2cf33c",
+      "name": "Notify Approval Queue",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{chat_id:$('Initialize Request').first().json.chat_id,text:'Материал заблокирован и отправлен на ручную проверку.'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        400
+      ],
+      "id": "8bf51ce7-a30b-4e4e-a2e2-f442d60bb95d",
+      "name": "Manual Review Notice",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        400
+      ],
+      "id": "5bf35a7e-e1e9-4b19-8bde-56833a506f81",
+      "name": "Notify Manual Review",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "qa_passed"
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        624,
+        544
+      ],
+      "id": "ab3df87a-e11b-4ee2-943b-ec400243b893",
+      "name": "QA Passed?"
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Initialize Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Schedule": {
+      "main": [
+        [
+          {
+            "node": "Initialize Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Request": {
+      "main": [
+        [
+          {
+            "node": "Approval Command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Command?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Content For Approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call Optional Trend Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Content For Approval": {
+      "main": [
+        [
+          {
+            "node": "Verify Approval Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Approval Request": {
+      "main": [
+        [
+          {
+            "node": "Approver Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approver Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Content Awaiting Approval?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unauthorized Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unauthorized Notice": {
+      "main": [
+        [
+          {
+            "node": "Notify Unauthorized Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Awaiting Approval?": {
+      "main": [
+        [
+          {
+            "node": "Publish Dzen Via API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Approval Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invalid Approval Notice": {
+      "main": [
+        [
+          {
+            "node": "Notify Invalid Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Dzen Via API": {
+      "main": [
+        [
+          {
+            "node": "Publish VK Via API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish VK Via API": {
+      "main": [
+        [
+          {
+            "node": "Publish Telegram Mirror",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Telegram Mirror": {
+      "main": [
+        [
+          {
+            "node": "Fetch Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Metrics": {
+      "main": [
+        [
+          {
+            "node": "Build CEO Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build CEO Report": {
+      "main": [
+        [
+          {
+            "node": "Send CEO Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Optional Trend Sources": {
+      "main": [
+        [
+          {
+            "node": "Select Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Topic": {
+      "main": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Research Agent": {
+      "main": [
+        [
+          {
+            "node": "Content Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Agent": {
+      "main": [
+        [
+          {
+            "node": "Normalize Draft And UTM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Draft And UTM": {
+      "main": [
+        [
+          {
+            "node": "Save Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Draft": {
+      "main": [
+        [
+          {
+            "node": "Call Optional Media Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Optional Media Agent": {
+      "main": [
+        [
+          {
+            "node": "QA Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QA Agent": {
+      "main": [
+        [
+          {
+            "node": "Normalize QA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize QA": {
+      "main": [
+        [
+          {
+            "node": "QA Passed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QA Passed?": {
+      "main": [
+        [
+          {
+            "node": "Manual Review Notice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Approval Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Approval Queue": {
+      "main": [
+        [
+          {
+            "node": "Notify Approval Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Review Notice": {
+      "main": [
+        [
+          {
+            "node": "Notify Manual Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}

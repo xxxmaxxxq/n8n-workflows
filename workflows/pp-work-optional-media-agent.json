@@ -1,0 +1,127 @@
+{
+  "name": "PP_work Optional - Media Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "jsonExample"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "3fa49538-6885-45c2-ae95-964dd209cbd8",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,prompt:'Создай обложку 16:9 без мелкого текста, логотипов без разрешения и обещаний результата.'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "d12c0b4a-b8b6-4819-8332-059183671b82",
+      "name": "Prepare Media Brief"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_IMAGE_PROVIDER_ENDPOINT/v1/images",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer YOUR_API_KEY\",\"apikey\":\"YOUR_API_KEY\"}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({prompt:$json.prompt,size:\"1792x1024\"}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "4f1f4660-3363-4f8a-83fa-0df3b50e3007",
+      "name": "Generate Image API"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/media_assets",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer YOUR_API_KEY\",\"apikey\":\"YOUR_API_KEY\"}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({content_id:$json.content_id,provider_response:$json,review_status:\"manual_review\"}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "5c3e4030-72ef-44d8-a48a-aec7c0479505",
+      "name": "Save Media Metadata"
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare Media Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Media Brief": {
+      "main": [
+        [
+          {
+            "node": "Generate Image API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Image API": {
+      "main": [
+        [
+          {
+            "node": "Save Media Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}

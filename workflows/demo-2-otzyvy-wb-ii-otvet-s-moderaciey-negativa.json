@@ -1,0 +1,324 @@
+{
+  "name": "ДЕМО 2 — Отзывы WB: ИИ-ответ с модерацией негатива",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "15672a18-d8fe-4bee-b4cf-6256688e85c7",
+      "name": "Каждые 15 минут",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1568,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://feedbacks-api.wildberries.ru/api/v1/feedbacks",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "isAnswered",
+              "value": "false"
+            },
+            {
+              "name": "take",
+              "value": "20"
+            },
+            {
+              "name": "skip",
+              "value": "0"
+            },
+            {
+              "name": "order",
+              "value": "dateDesc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.WB_API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "20d19bd0-a04e-4139-acff-9e748a3b5e5d",
+      "name": "Забрать отзывы WB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1344,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data.feedbacks",
+        "options": {}
+      },
+      "id": "401f2f62-d4f8-4e69-812e-79bacef04608",
+      "name": "Разбить на отзывы",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// НАСТРОЙКИ КЛИЕНТА\nconst BRAND = 'НАЗВАНИЕ БРЕНДА';\nconst TONE  = 'тёплый, короткий, без канцелярита, на «вы», без восклицаний через слово';\nconst MODERATION_CHAT_ID = '000000000'; // куда падает негатив на проверку\n\nconst f = $json;\nconst rating = Number(f.productValuation || 0);\nconst text = (f.text || '').trim();\nconst pros = (f.pros || '').trim();\nconst cons = (f.cons || '').trim();\nconst product = f.productDetails?.productName || 'товар';\n\nconst full = [text, pros ? `Плюсы: ${pros}` : '', cons ? `Минусы: ${cons}` : '']\n  .filter(Boolean).join('\\n');\n\nconst systemPrompt = `Ты отвечаешь на отзывы покупателей от лица бренда \"${BRAND}\" на Wildberries.\n\nТон: ${TONE}.\n\nПравила:\n- 2-4 предложения, не длиннее 400 символов.\n- Обращение на \"вы\", без имени (его нет).\n- На позитив: поблагодари конкретно за то, что человек похвалил.\n- На негатив: признай проблему, извинись один раз, предложи написать в чат WB для решения. Не спорь, не оправдывайся, не обвиняй покупателя.\n- Никогда не обещай возврат денег, замену или компенсацию - это решает продавец.\n- Не давай медицинских, юридических и финансовых советов.\n- Не упоминай, что ответ сгенерирован.\n- Верни ТОЛЬКО текст ответа, без кавычек и пояснений.`;\n\nconst userPrompt = `Товар: ${product}\\nОценка: ${rating} из 5\\nОтзыв покупателя:\\n${full || '(текста нет, только оценка)'}`;\n\nreturn [{\n  json: {\n    feedbackId: f.id,\n    rating,\n    product,\n    reviewText: full,\n    moderationChatId: MODERATION_CHAT_ID,\n    brand: BRAND,\n    systemPrompt,\n    userPrompt\n  }\n}];"
+      },
+      "id": "d0f04418-6861-4b86-819a-679bafea739e",
+      "name": "Собрать промпт",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-opus-5', max_tokens: 1000, system: $json.systemPrompt, messages: [ { role: 'user', content: $json.userPrompt } ] }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "75c39e62-2fe3-45f2-a625-7d729d2844db",
+      "name": "Claude пишет ответ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -688,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Собрать промпт').item.json;\nconst resp = $json;\n\n// Claude вернул отказ по безопасности - на публикацию не отправляем\nif (resp.stop_reason === 'refusal') {\n  return [{ json: { ...prev, answer: '', refused: true, needsHuman: true } }];\n}\n\nconst answer = (resp.content || [])\n  .filter(b => b.type === 'text')\n  .map(b => b.text)\n  .join('')\n  .trim();\n\n// Страховка: пустой или слишком длинный ответ - к человеку\nconst needsHuman = !answer || answer.length > 900 || prev.rating <= 3;\n\nreturn [{ json: { ...prev, answer, refused: false, needsHuman } }];"
+      },
+      "id": "9fe7db11-d148-4d86-a73c-b37ff81b5851",
+      "name": "Разобрать ответ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-auto-publish",
+              "leftValue": "={{ $json.needsHuman }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "de399b8e-2df2-45ba-a4ef-38ad74e02dad",
+      "name": "Оценка 4-5 и ответ чистый?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://feedbacks-api.wildberries.ru/api/v1/feedbacks",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.WB_API_TOKEN }}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ id: $json.feedbackId, text: $json.answer }) }}",
+        "options": {}
+      },
+      "id": "1ca22a13-22ed-4fbd-bfb4-efab9443a7a3",
+      "name": "Опубликовать на WB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Разобрать ответ').item.json.moderationChatId }}",
+        "text": "=⚠️ <b>ОТЗЫВ НА ПРОВЕРКУ</b>  ({{ $('Разобрать ответ').item.json.rating }}★)\n\n📦 {{ $('Разобрать ответ').item.json.product }}\n\n<b>Отзыв:</b>\n{{ $('Разобрать ответ').item.json.reviewText }}\n\n<b>Черновик ответа:</b>\n{{ $('Разобрать ответ').item.json.answer || '— модель отказалась, напишите вручную' }}\n\nПроверьте и опубликуйте в кабинете WB.",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "634211db-5636-405c-b4bf-a30a7034352a",
+      "name": "Негатив — человеку",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        240
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Каждые 15 минут": {
+      "main": [
+        [
+          {
+            "node": "Забрать отзывы WB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Забрать отзывы WB": {
+      "main": [
+        [
+          {
+            "node": "Разбить на отзывы",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Разбить на отзывы": {
+      "main": [
+        [
+          {
+            "node": "Собрать промпт",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Собрать промпт": {
+      "main": [
+        [
+          {
+            "node": "Claude пишет ответ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude пишет ответ": {
+      "main": [
+        [
+          {
+            "node": "Разобрать ответ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Разобрать ответ": {
+      "main": [
+        [
+          {
+            "node": "Оценка 4-5 и ответ чистый?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Оценка 4-5 и ответ чистый?": {
+      "main": [
+        [
+          {
+            "node": "Опубликовать на WB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Негатив — человеку",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}

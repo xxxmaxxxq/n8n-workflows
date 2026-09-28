@@ -1,0 +1,651 @@
+{
+  "name": "Create vertical AI videos from web articles with OpenAI, Seedance and Blotato",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "source_url",
+              "type": "string",
+              "value": "={{ $json.message.text }}"
+            },
+            {
+              "id": "a2",
+              "name": "seedance_model",
+              "type": "string",
+              "value": "bytedance/seedance-2.0/text-to-video"
+            },
+            {
+              "id": "a3",
+              "name": "video_duration",
+              "type": "number",
+              "value": 5
+            },
+            {
+              "id": "a4",
+              "name": "video_width",
+              "type": "number",
+              "value": 720
+            },
+            {
+              "id": "a5",
+              "name": "video_height",
+              "type": "number",
+              "value": 1280
+            },
+            {
+              "id": "a6",
+              "name": "video_fps",
+              "type": "number",
+              "value": 24
+            },
+            {
+              "id": "a7",
+              "name": "output_language",
+              "type": "string",
+              "value": "English"
+            },
+            {
+              "id": "a8",
+              "name": "wait_seconds",
+              "type": "number",
+              "value": 30
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b7ced1cb-7752-4efb-8ea6-37e8a102a2ef",
+      "name": "Configuration",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        1488,
+        720
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $input.first().json;\nconst source_url = (cfg.source_url || '').toString().trim();\nlet page_content = '';\nif (source_url) {\n  try {\n    const res = await this.helpers.httpRequest({ url: source_url, method: 'GET', headers: { 'User-Agent': 'Mozilla/5.0 (compatible; n8n)' }, timeout: 15000 });\n    const raw = typeof res === 'string' ? res : JSON.stringify(res);\n    page_content = raw\n      .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n      .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n      .replace(/<[^>]+>/g, ' ')\n      .replace(/&nbsp;/gi, ' ')\n      .replace(/\\s+/g, ' ')\n      .trim()\n      .slice(0, 4000);\n  } catch (e) {\n    page_content = '';\n  }\n}\nreturn [{ json: Object.assign({}, cfg, { source_url, page_content }) }];"
+      },
+      "id": "1f90391c-b2c4-4211-8d09-4c194f8e9def",
+      "name": "Read web link content",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1792,
+        720
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Configuration').item.json.source_url }}{{ $json.page_content ? '\\n\\n---\\nContent extracted from the page:\\n' + $json.page_content : '' }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are an expert AI video content strategist for short-form vertical video (TikTok, Instagram Reels, YouTube Shorts) and a text-to-video prompt engineer for Seedance 2.0 by ByteDance.\n\nYou receive a web page URL plus extracted text. Find the single key idea then produce ALL of the following as structured JSON:\n\n1. video_prompt: ONE cinematic Seedance 2.0 prompt in English, under 200 characters. Describe subject, action, setting, camera move, lighting, mood. No text, no real people, no logos.\n2. tiktok_caption: hook-driven, written in {{ $('Configuration').item.json.output_language }}, MAX 3 hashtags.\n3. instagram_caption: aesthetic, written in {{ $('Configuration').item.json.output_language }}, MAX 3 hashtags.\n4. youtube_title: max 60 chars, written in {{ $('Configuration').item.json.output_language }}, SEO-friendly.\n5. youtube_description: max 200 chars, written in {{ $('Configuration').item.json.output_language }}, 1-2 keywords.\n\nReturn only the structured output."
+        }
+      },
+      "id": "52484b08-9c18-4d06-8469-37d42b9788bf",
+      "name": "Generate prompt and captions",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        2064,
+        720
+      ],
+      "typeVersion": 3.1
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gemini-3.5-flash",
+          "mode": "list",
+          "cachedResultName": "gemini-3.5-flash"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "id": "c4fa4217-ff3c-43e6-a0b1-4e7d56bfccf4",
+      "name": "OpenAI chat model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [
+        1968,
+        912
+      ],
+      "typeVersion": 1.3,
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"video_prompt\": \"Cinematic slow push-in on a glowing futuristic city skyline at dusk, neon reflections, volumetric light\",\n  \"tiktok_caption\": \"The future is moving faster than you think #ai #tech #future\",\n  \"instagram_caption\": \"A glimpse of what comes next #aiart #cinematic #future\",\n  \"youtube_title\": \"The AI shift nobody saw coming\",\n  \"youtube_description\": \"A cinematic AI-generated short. Made with Seedance 2.0. #shorts #ai\"\n}",
+        "autoFix": true
+      },
+      "id": "2eb959cc-95a4-4d8e-b767-260f76362269",
+      "name": "Parse content as JSON",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "position": [
+        2160,
+        928
+      ],
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/veo-3.0-generate-001:predictLongRunning",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "REDACTED_GOOGLE_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"instances\": [\n    {\n      \"prompt\": \"{{$json.output.video_prompt}}\"\n    }\n  ],\n  \"parameters\": {\n    \"aspectRatio\": \"9:16\",\n    \"durationSeconds\": 8,\n    \"sampleCount\": 1\n  }\n}",
+        "options": {}
+      },
+      "id": "6c82c2c4-9563-4d1a-9859-97b6121c28d8",
+      "name": "Submit video to Seedance",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2432,
+        720
+      ],
+      "typeVersion": 4.4
+    },
+    {
+      "parameters": {
+        "amount": "={{ $('Configuration').item.json.wait_seconds }}"
+      },
+      "id": "c6a8c4f3-0b23-48c6-a03e-3e7b79ebb3a8",
+      "name": "Wait for video",
+      "type": "n8n-nodes-base.wait",
+      "position": [
+        2624,
+        720
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "url": "=https://api.atlascloud.ai/api/v1/model/prediction/{{ $('Submit video to Seedance').item.json.data.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "20d02424-dedc-4503-98c9-1f5a80099cd0",
+      "name": "Get video status",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2816,
+        720
+      ],
+      "typeVersion": 4.4,
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "c1",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.data.status }}",
+              "rightValue": "completed"
+            },
+            {
+              "id": "c2",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.data.status }}",
+              "rightValue": "succeeded"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ec4404b2-b445-4a4b-ad94-32db445c314d",
+      "name": "Is video ready?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        3056,
+        720
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1",
+              "name": "video_url",
+              "type": "string",
+              "value": "={{ $json.data.outputs[0] }}"
+            },
+            {
+              "id": "b2",
+              "name": "tiktok_caption",
+              "type": "string",
+              "value": "={{ $('Generate prompt and captions').item.json.output.tiktok_caption }}"
+            },
+            {
+              "id": "b3",
+              "name": "instagram_caption",
+              "type": "string",
+              "value": "={{ $('Generate prompt and captions').item.json.output.instagram_caption }}"
+            },
+            {
+              "id": "b4",
+              "name": "youtube_title",
+              "type": "string",
+              "value": "={{ $('Generate prompt and captions').item.json.output.youtube_title }}"
+            },
+            {
+              "id": "b5",
+              "name": "youtube_description",
+              "type": "string",
+              "value": "={{ $('Generate prompt and captions').item.json.output.youtube_description }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "887ccc15-f453-461a-a18e-78f81c5bc33b",
+      "name": "Collect video and captions",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        3424,
+        704
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "content": "# Превратите веб-статьи в видеоролики, созданные с помощью ИИ, с помощью Seedance 2.0 и опубликуйте их в TikTok, Instagram и YouTube\n\n# 📥 [Полную документацию можно найти в Notion](https://automatisation.notion.site/Turn-web-articles-into-AI-videos-with-Seedance-2-0-and-publish-to-TikTok-Instagram-and-YouTube-EN-3893d6550fd9815c9c4bd0b679d7ec68)\n\nОтправьте ссылку на любую статью или запись в блоге через Telegram. Искусственный интеллект читает страницу, пишет подсказку для кинематографического видео Seedance 2.0, а также субтитры для платформы, [AtlasCloud](https://www.atlascloud.ai/?ref=8QKPJE) генерирует короткое вертикальное видео с собственным звуком, а [Blotato](https://blotato.com/?ref=firas) автоматически публикует его в TikTok, Instagram и YouTube. В Telegram отправляется подтверждающее сообщение.\n\n> ⚠️ Использует узел сообщества [Blotato](https://blotato.com/?ref=firas): требуется самостоятельный хостинг n8n или n8n Cloud с включенными проверенными узлами сообщества.\n\n## Как это работает\n1. Вы отправляете URL-адрес своему боту в Telegram.\n\n2. Узел **Конфигурация** захватывает URL-адрес и хранит все настройки: модель Seedance, продолжительность видео, разрешение и язык вывода.\n\n3. Узел Code получает веб-страницу и преобразует HTML-код в чистый текст.\n\n4. Агент ИИ (OpenAI) считывает содержимое страницы и возвращает структурированный JSON: запрос Seedance + подпись TikTok + подпись Instagram + заголовок и описание YouTube.\n\n5. Запрос отправляется в API Seedance 2.0 [AtlasCloud](https://www.atlascloud.ai/?ref=8QKPJE). Цикл Wait → Get status → IF опрашивает систему до тех пор, пока видео не будет готово.\n\n6. Узел Set собирает URL видео и все подписи.\n\n7. Три узла [Blotato](https://blotato.com/?ref=firas) публикуют видео в TikTok, Instagram и YouTube.\n\n8. В Telegram отправляется подтверждающее сообщение со ссылкой на видео.\n\n## Настройка\n1. **Telegram**: создайте бота с @BotFather, добавьте токен бота в качестве учетных данных Telegram, подключите его к узлу триггера и узлу подтверждения.\n\n2. **OpenAI**: подключите свои учетные данные \"OpenAI account\" к подузлу модели чата.\n\n3. **[AtlasCloud](https://www.atlascloud.ai/?ref=8QKPJE)**: создайте учетную запись, сгенерируйте ключ API, создайте учетные данные HTTP Header Auth (Имя: `Authorization`, Значение: `Bearer YOUR_KEY`). После импорта **выберите его вручную** на двух узлах HTTP AtlasCloud.\n\n4. **[Blotato](https://blotato.com/?ref=firas)**: установите узел сообщества, подключите свои учетные записи TikTok, Instagram и YouTube, затем выберите свою учетную запись на каждом узле Blotato.\n\n5. Активируйте рабочий процесс и отправьте URL-адрес своему боту.\n\n## Требования\n- Самостоятельно размещенный n8n или n8n Cloud с проверенными узлами сообщества\n- Токен бота Telegram (бесплатно, через @BotFather)\n- Ключ API OpenAI\n- Ключ API [AtlasCloud](https://www.atlascloud.ai/?ref=8QKPJE) (видео Seedance 2.0 ≈ $0.09–0.15/с)\n- Аккаунт [Blotato](https://blotato.com/?ref=firas) с подключенными TikTok, Instagram и YouTube\n\n## Настройка\n- Переключите модель на `bytedance/seedance-2.0-fast/text-to-video` (дешевле, быстрее) в **Конфигурации**.\n\n- Изменить `video_duration`, `video_width`/`video_height` (720×1280 = вертикальное отображение 9:16), `output_language`.\n\n- Отредактировать сообщение системы агента, изменив тон или правила использования хэштегов.\n\n- Добавить этап ручного подтверждения (форма ожидания) перед узлами Blotato.\n\n- Добавить платформы, дублируя узел Blotato.",
+        "height": 1376,
+        "width": 760
+      },
+      "id": "10029bf1-51f1-42a7-bad4-92dd45267555",
+      "name": "Sticky Note 806f1ca4",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        368,
+        240
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## 1. Receive URL and settings\nTelegram trigger receives a URL, then the **Configuration** node captures it and holds the Seedance model, video size and output language. Edit settings here.",
+        "height": 488,
+        "width": 460,
+        "color": 7
+      },
+      "id": "ec6badac-9d86-4732-af5a-18cbb15cd931",
+      "name": "Sticky Note da818d5e",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1200,
+        368
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## 2. AI prompt and captions\nA Code node fetches the page, then an OpenAI agent returns structured JSON: a cinematic video prompt + captions for TikTok, Instagram and YouTube.",
+        "height": 488,
+        "width": 620,
+        "color": 7
+      },
+      "id": "db370f02-d1fb-4b98-9743-b95357152c10",
+      "name": "Sticky Note 9c8ec2b6",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1696,
+        368
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## 3. Generate the video — [AtlasCloud](https://www.atlascloud.ai/?ref=8QKPJE) (Seedance 2.0)\nSubmit the prompt, then poll every 30s until the MP4 is ready.\n⚠️ After import, manually select the AtlasCloud API credential on both HTTP nodes.",
+        "height": 488,
+        "width": 980,
+        "color": 7
+      },
+      "id": "07a08e34-cca5-4a59-9a13-e6f1579bd305",
+      "name": "Sticky Note fe84685a",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2352,
+        368
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## 4. Publish — [Blotato](https://blotato.com/?ref=firas) + confirmation\nCollect the video URL and captions, then publish to TikTok, Instagram and YouTube. A confirmation is sent back to Telegram. Pick your connected account in each [Blotato](https://blotato.com/?ref=firas) node.",
+        "height": 552,
+        "width": 1280,
+        "color": 7
+      },
+      "id": "958b8b2e-aba6-4d17-99a8-2380c67ca28b",
+      "name": "Sticky Note c98b4b60",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3344,
+        368
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "aa8b0e0f-8fde-4fc1-93b3-f24061f6366c",
+      "name": "Receive URL on Telegram",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "position": [
+        1216,
+        720
+      ],
+      "typeVersion": 1.3,
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Receive URL on Telegram').item.json.message.chat.id }}",
+        "text": "=✅ Video published!\n\n🎥 {{ $('Collect video and captions').item.json.youtube_title }}\n\n➡️ TikTok, Instagram and YouTube done.\n📎 {{ $('Collect video and captions').item.json.video_url }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "963f4140-18ad-45ad-98cf-3861840f894b",
+      "name": "Send confirmation on Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        4192,
+        704
+      ],
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.6-luna",
+          "mode": "list",
+          "cachedResultName": "gpt-5.6-luna"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2096,
+        1136
+      ],
+      "id": "fbbade79-70bd-4c0c-98e3-fcd67dcdf474",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{$json.video_url}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3728,
+        704
+      ],
+      "id": "27a51846-d30e-4e0d-b739-423e1ecf0ebc",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "operation": "sendVideo",
+        "chatId": "={{$node[\"Receive URL on Telegram\"].json[\"message\"][\"chat\"][\"id\"]}}",
+        "binaryData": true,
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3920,
+        704
+      ],
+      "id": "11d0366d-adfa-4be8-9510-d09a7437e354",
+      "name": "Telegram Send Video",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Configuration": {
+      "main": [
+        [
+          {
+            "node": "Read web link content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for video": {
+      "main": [
+        [
+          {
+            "node": "Get video status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is video ready?": {
+      "main": [
+        [
+          {
+            "node": "Collect video and captions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait for video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get video status": {
+      "main": [
+        [
+          {
+            "node": "Is video ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI chat model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate prompt and captions",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse content as JSON": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate prompt and captions",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read web link content": {
+      "main": [
+        [
+          {
+            "node": "Generate prompt and captions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receive URL on Telegram": {
+      "main": [
+        [
+          {
+            "node": "Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit video to Seedance": {
+      "main": [
+        [
+          {
+            "node": "Wait for video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect video and captions": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate prompt and captions": {
+      "main": [
+        [
+          {
+            "node": "Submit video to Seedance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Parse content as JSON",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send confirmation on Telegram": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Send Video": {
+      "main": [
+        [
+          {
+            "node": "Send confirmation on Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}

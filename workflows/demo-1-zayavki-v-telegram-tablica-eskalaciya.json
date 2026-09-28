@@ -1,0 +1,305 @@
+{
+  "name": "ДЕМО 1 — Заявки в Telegram + таблица + эскалация",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zayavka",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "584234c3-5dce-4ca6-805f-e87fee33ee71",
+      "name": "Форма с сайта",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1504,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// НАСТРОЙКИ КЛИЕНТА — поменять на реальные\nconst MANAGER_CHAT_ID = '000000000';   // chat_id менеджера\nconst OWNER_CHAT_ID   = '000000000';   // chat_id владельца для эскалации\nconst COMPANY         = 'Название компании';\n\nconst body = $json.body || $json;\n\n// Нормализация: форма может слать поля как угодно\nconst pick = (...keys) => {\n  for (const k of keys) {\n    if (body[k] !== undefined && String(body[k]).trim() !== '') return String(body[k]).trim();\n  }\n  return '';\n};\n\nconst phoneRaw = pick('phone', 'tel', 'telephone', 'Телефон', 'phone_number');\nconst phone = phoneRaw.replace(/[^\\d+]/g, '');\n\nconst id = 'Z-' + Date.now().toString(36).toUpperCase();\nconst now = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });\n\nreturn [{\n  json: {\n    id,\n    createdAt: now,\n    name: pick('name', 'Name', 'Имя', 'fio') || 'не указано',\n    phone: phone || 'не указан',\n    email: pick('email', 'Email', 'Почта'),\n    comment: pick('comment', 'message', 'Комментарий', 'text') || 'без комментария',\n    source: pick('source', 'utm_source', 'Источник') || 'сайт',\n    status: 'новая',\n    managerChatId: MANAGER_CHAT_ID,\n    ownerChatId: OWNER_CHAT_ID,\n    company: COMPANY\n  }\n}];"
+      },
+      "id": "3cdb1c7b-182d-401d-883d-a99e5c003707",
+      "name": "Нормализация полей",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1296,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ANVKetZwCrG-hyWxuVnqhj_cwHstaLJqoU1ZsyhxvgU",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Заявки",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "Дата": "={{ $json.createdAt }}",
+            "Имя": "={{ $json.name }}",
+            "Телефон": "={{ $json.phone }}",
+            "Email": "={{ $json.email }}",
+            "Комментарий": "={{ $json.comment }}",
+            "Источник": "={{ $json.source }}",
+            "Статус": "={{ $json.status }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "364e4b13-c530-4c0c-aeae-f66ddaf0d77b",
+      "name": "Записать в таблицу",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1072,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Нормализация полей').item.json.managerChatId }}",
+        "text": "=🔔 <b>НОВАЯ ЗАЯВКА</b>  {{ $('Нормализация полей').item.json.id }}\n\n👤 {{ $('Нормализация полей').item.json.name }}\n📞 {{ $('Нормализация полей').item.json.phone }}\n✉️ {{ $('Нормализация полей').item.json.email }}\n💬 {{ $('Нормализация полей').item.json.comment }}\n\n🌐 Источник: {{ $('Нормализация полей').item.json.source }}\n🕒 {{ $('Нормализация полей').item.json.createdAt }}\n\n⚠️ Если не обработаете за 15 минут — уйдёт руководителю.",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "e8d4e9f8-d4ea-4ca6-b108-0aaeb8519798",
+      "name": "Уведомить менеджера",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -848,
+        16
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, id: $('Нормализация полей').item.json.id, message: 'Заявка принята, перезвоним в течение часа' }) }}",
+        "options": {}
+      },
+      "id": "3e611b13-2952-4ced-89f9-025a0a9825ca",
+      "name": "Ответ сайту",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -624,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 15,
+        "unit": "minutes"
+      },
+      "id": "28a76640-e572-46b3-8087-1fb6f6b71930",
+      "name": "Ждать 15 минут",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -416,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ANVKetZwCrG-hyWxuVnqhj_cwHstaLJqoU1ZsyhxvgU",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Заявки",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "id",
+              "lookupValue": "={{ $('Нормализация полей').item.json.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6e37634b-7ba7-4e9d-8e41-682803974fcf",
+      "name": "Проверить статус",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -192,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-not-handled",
+              "leftValue": "={{ $json['Статус'] }}",
+              "rightValue": "новая",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2b89da6a-4a1a-4cf3-8db7-55ed31e80693",
+      "name": "Всё ещё не обработана?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        32,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Нормализация полей').item.json.ownerChatId }}",
+        "text": "=🚨 <b>ЗАЯВКУ НЕ ВЗЯЛИ 15 МИНУТ</b>\n\n{{ $('Нормализация полей').item.json.id }}\n👤 {{ $('Нормализация полей').item.json.name }}\n📞 {{ $('Нормализация полей').item.json.phone }}\n💬 {{ $('Нормализация полей').item.json.comment }}\n\nМенеджер не сменил статус в таблице.",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "f8e2091f-d88c-49f3-871c-31354ad60ec8",
+      "name": "Эскалация владельцу",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        -96
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Форма с сайта": {
+      "main": [
+        [
+          {
+            "node": "Нормализация полей",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Нормализация полей": {
+      "main": [
+        [
+          {
+            "node": "Записать в таблицу",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Записать в таблицу": {
+      "main": [
+        [
+          {
+            "node": "Уведомить менеджера",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Уведомить менеджера": {
+      "main": [
+        [
+          {
+            "node": "Ответ сайту",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ответ сайту": {
+      "main": [
+        [
+          {
+            "node": "Ждать 15 минут",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ждать 15 минут": {
+      "main": [
+        [
+          {
+            "node": "Проверить статус",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Проверить статус": {
+      "main": [
+        [
+          {
+            "node": "Всё ещё не обработана?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Всё ещё не обработана?": {
+      "main": [
+        [
+          {
+            "node": "Эскалация владельцу",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}

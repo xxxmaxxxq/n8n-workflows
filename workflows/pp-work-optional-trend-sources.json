@@ -1,0 +1,226 @@
+{
+  "name": "PP_work Optional - Trend Sources",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "jsonExample"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -624,
+        -32
+      ],
+      "id": "2773de34-f72b-4ae1-8d20-df273c83e74f",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_TRENDS_API_ENDPOINT/source-a",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer YOUR_API_KEY\",\"apikey\":\"YOUR_API_KEY\"}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        -144
+      ],
+      "id": "9b45d9b9-926d-40a3-a8af-e5965f7af772",
+      "name": "Fetch Source A"
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_TRENDS_API_ENDPOINT/source-b",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer YOUR_API_KEY\",\"apikey\":\"YOUR_API_KEY\"}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        64
+      ],
+      "id": "77e686cf-6d8b-488d-9989-28839a8ca3e0",
+      "name": "Fetch Source B"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -32
+      ],
+      "id": "4d646c7e-0f19-4d9d-a779-6ee0a1bcda24",
+      "name": "Merge Sources"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out=[];const s=new Set();for(const i of $input.all()){const x=Array.isArray(i.json.items)?i.json.items:[i.json];for(const a of x){const t=String(a.title||a.topic||a.text||'').trim();if(t&&!s.has(t)){s.add(t);out.push({json:{topic:t,source_url:a.url||'UNKNOWN',status:'candidate'}})}}}return out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        -32
+      ],
+      "id": "3d455241-5866-4b5f-83e1-7d006243b314",
+      "name": "Normalize Signals"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Верни JSON-массив тем с оценками demand, commercial_fit, difficulty, risk, offer_fit и title_idea. Сигналы: {{ JSON.stringify($input.all().map(i=>i.json)) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        272,
+        -32
+      ],
+      "id": "030b5947-07c4-48f4-9302-e3c1198c6947",
+      "name": "Score Signals",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/content_backlog",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer YOUR_API_KEY\",\"apikey\":\"YOUR_API_KEY\"}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({payload:$json.output?.[0]?.content?.[0]?.text||$json}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        608,
+        -32
+      ],
+      "id": "c31b4c80-9ef3-4bf6-a255-bb8e855a7880",
+      "name": "Save Backlog"
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Source A",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Source B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Source A": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Source B": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Sources": {
+      "main": [
+        [
+          {
+            "node": "Normalize Signals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Signals": {
+      "main": [
+        [
+          {
+            "node": "Score Signals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Signals": {
+      "main": [
+        [
+          {
+            "node": "Save Backlog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}

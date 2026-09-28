@@ -1,0 +1,1038 @@
+{
+  "name": "PP_work — 2 пост Дзен",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $('Approve / reject / revise').first().json.status }}",
+              "rightValue": "approved",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "39ece758-ae5c-4cac-8b06-393c05b8789f",
+      "name": "IF — only if approved1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2192,
+        3232
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12
+            }
+          ]
+        }
+      },
+      "id": "f182b703-3a63-42fc-a879-61c22e7cae0c",
+      "name": "Schedule — 2 articles/day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        1536,
+        2464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const runId =\n  'run_' +\n  Date.now() +\n  '_' +\n  Math.random().toString(36).substring(2, 10);\n\nreturn [\n  {\n    json: {\n      run_id: runId,\n      channel: 'AI для жизни и бизнеса',\n      dzen_url: 'https://dzen.ru/id/YOUR_DZEN_ID',\n\n      // Вставь сюда свой Telegram Chat ID\n      chat_id: 'YOUR_TELEGRAM_CHAT_ID',\n\n      supabase_url: 'https://sxmohmchavqpccszmrtv.supabase.co',\n      created_at: new Date().toISOString()\n    }\n  }\n];\n"
+      },
+      "id": "84045969-09d4-4030-b833-248fbd03023b",
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        2464
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.supabase_url}}/rest/v1/articles?select=title,topic_key,title_normalized,content_hash,created_at,status&order=created_at.desc&limit=100",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "5c8262ff-389b-409a-be4a-b004247f957f",
+      "name": "Supabase — recent topics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        2464
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://news.google.com/rss/search?q=нейросети+OR+автоматизация+OR+ИИ&hl=ru&gl=RU&ceid=RU:ru",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "c7f48e3b-6c12-441d-9471-b283923de9c2",
+      "name": "Trends — Google News RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        2688
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "id": "7745ad6f-571c-41ba-9241-4a6f3a74b69f",
+      "name": "Merge DB + trends",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2240,
+        2544
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Ты — редактор-аналитик Дзена. Сгенерируй 12 свежих тем для канала «AI для жизни и бизнеса» на основе RSS-трендов и списка уже использованных тем. Не повторяй темы за последние 30 дней. Выбирай практичные темы для широкой аудитории. Верни только валидный JSON без markdown: {\"topics\":[{\"title\":\"...\",\"topic_key\":\"...\",\"angle\":\"...\",\"trend_source\":\"...\"}]}\n\nУже использованные записи:\n{{ JSON.stringify($('Supabase — recent topics').all().map(i=>i.json)) }}\n\nRSS-тренды:\n{{ $('Trends — Google News RSS').first().json.data || JSON.stringify($('Trends — Google News RSS').first().json) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "bfe0d338-bee7-493f-8e90-c518d2778278",
+      "name": "Topic Agent — trends + uniqueness",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2480,
+        2544
+      ],
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw=$json.output?.[0]?.content?.[0]?.text||$json.text||''; const clean=raw.replace(/^```json\\s*|```$/g,'').trim(); let x; try{x=JSON.parse(clean)}catch(e){x={topics:[{title:'Как использовать нейросети для экономии времени каждый день',topic_key:'ai-time-saving',angle:'Практическая инструкция',trend_source:'fallback'}]};} const topics=x.topics||[]; const pick=topics[Math.floor(Math.random()*Math.max(topics.length,1))]||topics[0]; return [{json:{...pick,run_id:$('Config').first().json.run_id,chat_id:$('Config').first().json.chat_id,supabase_url:$('Config').first().json.supabase_url,created_at:new Date().toISOString()}}];"
+      },
+      "id": "09fd2f20-528c-4044-a791-70a906d119de",
+      "name": "Pick unique topic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2768,
+        2544
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Ты — профессиональный автор статьи для Дзена. Напиши полезную статью 1500–2000 слов на тему: {{ $json.title }}. Угол подачи: {{ $json.angle }}. Стиль простой, живой, без канцелярита. Верни JSON без markdown: {\"title\":\"...\",\"content\":\"...\",\"keywords\":[\"...\"],\"affiliate_intent\":\"...\"}. Не выдумывай факты, не упоминай ИИ как автора."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "869b4abf-8533-415a-825d-5afa22ecb00b",
+      "name": "Article Writer",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2928,
+        2544
+      ],
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Ты — SEO-редактор и QA. Получи статью ниже. Верни JSON без markdown: {\"title\":\"финальный заголовок\",\"content\":\"готовый текст\",\"description\":\"описание до 160 символов\",\"keywords\":[\"...\"],\"qa\":{\"facts_ok\":true,\"readability\":\"...\"}}. Сохрани смысл, убери повторы, сделай короткие абзацы и подзаголовки. Не добавляй неподтверждённые сведения.\n\n{{ $json.output?.[0]?.content?.[0]?.text || JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "d8ad915c-dde7-451a-87ea-f00f07eca00f",
+      "name": "SEO + QA Agent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        3200,
+        2544
+      ],
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Ты — менеджер партнёрских офферов. Из текста статьи выбери максимум один релевантный оффер из списка. Если подходящего нет — affiliate_url оставь пустым. Не выдумывай ссылки. Верни JSON: {\"affiliate_name\":\"...\",\"affiliate_url\":\"...\",\"placement\":\"...\",\"disclosure\":\"Реклама\"}. Офферы: AI SaaS — https://example.com/ai?utm_source=dzen&utm_medium=article; VPS — https://example.com/vps?utm_source=dzen&utm_medium=article; VPN — https://example.com/vpn?utm_source=dzen&utm_medium=article.\n\nСтатья:\n{{ $json.output?.[0]?.content?.[0]?.text || JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "a211df32-4fd9-4858-a111-4860fda4a87d",
+      "name": "Affiliate Selector + UTM",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        3472,
+        2544
+      ],
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={{ encodeURIComponent($('Pick unique topic').first().json.title) }}&gsrnamespace=6&gsrlimit=5&prop=imageinfo&iiprop=url&iiurlwidth=1200&format=json",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "163d5b93-9de5-45f6-a3bc-9cea837ab259",
+      "name": "Images — Wikimedia Commons (3–5)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2992,
+        2800
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "b53aca6f-44da-42ba-84e3-77b745f2db5b",
+      "name": "Merge article + affiliate + images",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3840,
+        2576
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const topic=$('Pick unique topic').first().json; const seoRaw=$('SEO + QA Agent').first().json.output?.[0]?.content?.[0]?.text||''; const affRaw=$('Affiliate Selector + UTM').first().json.output?.[0]?.content?.[0]?.text||''; const parse=s=>{try{return JSON.parse(s.replace(/^```json\\s*|```$/g,'').trim())}catch(e){return {}}}; const seo=parse(seoRaw), aff=parse(affRaw); const pages=$json.query?.pages||{}; const images=Object.values(pages).map(p=>p.imageinfo?.[0]?.thumburl||p.imageinfo?.[0]?.url).filter(Boolean).slice(0,5); const title=seo.title||topic.title; let content=seo.content||seoRaw; if(aff.affiliate_url) content+='\\n\\n'+(aff.placement||'Полезный сервис по теме статьи:')+' '+aff.affiliate_url+'\\n'+(aff.disclosure||'Реклама'); const hash=Buffer.from(title+'|'+content).toString('base64').slice(0,64); return [{json:{run_id:topic.run_id,title,content,description:seo.description||'',keywords:seo.keywords||[],topic_key:topic.topic_key,title_normalized:title.toLowerCase().replace(/[^a-zа-я0-9]+/gi,' ').trim(),content_hash:hash,image_urls:images,status:'awaiting_approval',created_at:topic.created_at,chat_id:topic.chat_id,supabase_url:topic.supabase_url,affiliate_url:aff.affiliate_url||''}}];"
+      },
+      "id": "6152687d-fe8b-425f-b323-647004c23ae9",
+      "name": "Build article package",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        2576
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.supabase_url}}/rest/v1/articles",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  run_id: $json.run_id,\n  title: $json.title,\n  title_normalized: $json.title_normalized,\n  topic_key: $json.topic_key,\n  content_hash: $json.content_hash,\n  content: $json.content,\n  description: $json.description,\n  keywords: $json.keywords,\n  image_urls: $json.image_urls,\n  affiliate_url: $json.affiliate_url,\n  status: $json.status || 'awaiting_approval',\n  chat_id: $json.chat_id,\n  created_at: $json.created_at\n}) }}\n",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "6f9d73ad-11a7-4d18-828d-413cb3af503a",
+      "name": "Supabase — save draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4240,
+        2560
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const a=$('Build article package').first().json; const preview=a.content.slice(0,2500); return [{json:{chat_id:a.chat_id,text:'Новая статья на проверку\\n\\n'+a.title+'\\n\\n'+preview+'\\n\\nID: '+a.run_id+'\\n\\nДля подтверждения: /approve '+a.run_id+'\\nДля отклонения: /reject '+a.run_id+'\\nДля доработки: /revise '+a.run_id}}];"
+      },
+      "id": "3917dc36-e6c3-4e67-93b1-2476074989ed",
+      "name": "Approval preview",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4496,
+        2560
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chat_id}}",
+        "text": "={{$json.text}}",
+        "additionalFields": {}
+      },
+      "id": "d4e047c1-4c32-4486-aea0-ba3a88d3d72b",
+      "name": "Telegram — approval request",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4752,
+        2560
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "inline_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "bc652f0f-5b36-47af-8ac7-e6d908fcda44",
+      "name": "Telegram Trigger — commands",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        960,
+        3152
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst m = data.message || data.сообщение || data;\nconst text = (m.text || m.текст || data.text || data.текст || '').toString().trim();\nconst chat = m.chat || m.чат || {};\nconst from = m.from || m.от || {};\n\nconst chatId = chat.id || chat.идентификатор || data.chat_id;\nconst userId = from.id || from.идентификатор;\n\nconst match = text.match(/^\\/(approve|reject|revise|утвердить|отклонить|доработать)\\s+([a-zA-Z0-9_-]+)/i);\n\nif (!match) return [];\n\nlet command = match[1].toLowerCase();\n// Переводим русские команды в английские\nif (command === 'утвердить') command = 'approve';\nif (command === 'отклонить') command = 'reject';\nif (command === 'доработать') command = 'revise';\n\nreturn [{\n  json: {\n    command: command,\n    run_id: match[2],\n    chat_id: chatId,\n    supabase_url: 'https://sxmohmchavqpccszmrtv.supabase.co',\n    user_id: userId\n  }\n}];"
+      },
+      "id": "1fbb5f34-2286-47ce-9b90-c20ddac45952",
+      "name": "Parse command + auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        3152
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "={{$json.supabase_url}}/rest/v1/articles?select=*&run_id=eq.{{$json.run_id}}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "2307e62f-9d38-463e-acee-b92d9e5fa3ea",
+      "name": "Supabase — get article",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        3152
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd=$('Parse command + auth').first().json; const row=$json[0]||$json; if(cmd.command==='reject') return [{json:{...cmd,status:'rejected',message:'Статья отклонена: '+cmd.run_id}}]; if(cmd.command==='revise') return [{json:{...cmd,status:'revision_requested',message:'Статья отправлена на доработку: '+cmd.run_id}}]; return [{json:{...cmd,...row,status:'approved',message:'Статья подтверждена и передана в очередь публикации: '+cmd.run_id}}];"
+      },
+      "id": "ac5b5fce-0461-43ed-a447-6ccdcd4feea8",
+      "name": "Approve / reject / revise",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        3152
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$json.supabase_url}}/rest/v1/articles?run_id=eq.{{$json.run_id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({status:$json.status,updated_at:new Date().toISOString()})}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "5322f66d-f167-4de6-96fb-0e1eb9ed338d",
+      "name": "Supabase — update status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1952,
+        3232
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PLAYWRIGHT_PUBLISH_URL || 'https://YOUR-PLAYWRIGHT-SERVICE/publish'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ run_id: $('Approve / reject / revise').first().json.run_id, title: $('Approve / reject / revise').first().json.title, content: $('Approve / reject / revise').first().json.content, image_urls: $('Approve / reject / revise').first().json.image_urls || [] }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "cbd1931f-297f-46f2-8c18-03c547dd0205",
+      "name": "Playwright — publish to Dzen (external service)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2480,
+        3232
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{chat_id:$('Parse command + auth').first().json.chat_id,text:$json.message||('Команда обработана: '+$json.status)}}];"
+      },
+      "id": "a2ad7d08-5932-4744-8b92-277402fb7355",
+      "name": "Build Telegram result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1936,
+        2992
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chat_id}}",
+        "text": "={{$json.text}}",
+        "additionalFields": {}
+      },
+      "id": "200999be-750c-4e9f-9937-f4a4cdfda94c",
+      "name": "Telegram — result",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2176,
+        2992
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Content Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "37221a46-b138-421a-8360-582cc0a6a5ab",
+      "name": "Schedule — daily maintenance",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        3056,
+        3152
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://sxmohmchavqpccszmrtv.supabase.co/rest/v1/articles?select=*&status=eq.published&order=published_at.asc&limit=100",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "287d0354-1c8a-4266-a58a-929c513a7aa3",
+      "name": "Supabase — published articles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3296,
+        3152
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Проанализируй опубликованные статьи и выбери максимум одну для обновления. Ориентируйся на низкие просмотры/CTR/клики, если метрик нет — выбери самую старую. Верни JSON без markdown: {\"action\":\"rewrite|none\",\"run_id\":\"...\",\"reason\":\"...\",\"new_title\":\"...\"}. Данные: {{JSON.stringify($json)}}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "250542c0-afca-4209-9eff-860908183b73",
+      "name": "Performance Analyst + rewrite decision",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        3488,
+        3152
+      ],
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw=$json.output?.[0]?.content?.[0]?.text||''; let x; try{x=JSON.parse(raw.replace(/^```json\\s*|```$/g,'').trim())}catch(e){x={action:'none'}}; return [{json:x}];"
+      },
+      "id": "b7e02373-35cd-4c02-b938-4cb2b8bbe7f9",
+      "name": "Parse maintenance decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3808,
+        3152
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sxmohmchavqpccszmrtv.supabase.co/rest/v1/article_metrics",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({run_id:$json.run_id,action:$json.action,reason:$json.reason,checked_at:new Date().toISOString()})}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "e04a7a4e-5a34-46d3-9225-65ef055c394f",
+      "name": "Supabase — save metrics decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4048,
+        3152
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.CROSSPOST_WEBHOOK_URL || 'https://YOUR-CROSSPOST-SERVICE/webhook'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify($json)}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "ef45aaa1-5252-48d2-9f4d-7d9b83aa6424",
+      "name": "Crosspost — external webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4288,
+        3152
+      ],
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "IF — only if approved1": {
+      "main": [
+        [
+          {
+            "node": "Playwright — publish to Dzen (external service)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule — 2 articles/day": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Supabase — recent topics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trends — Google News RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase — recent topics": {
+      "main": [
+        [
+          {
+            "node": "Merge DB + trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trends — Google News RSS": {
+      "main": [
+        [
+          {
+            "node": "Merge DB + trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge DB + trends": {
+      "main": [
+        [
+          {
+            "node": "Topic Agent — trends + uniqueness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Topic Agent — trends + uniqueness": {
+      "main": [
+        [
+          {
+            "node": "Pick unique topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick unique topic": {
+      "main": [
+        [
+          {
+            "node": "Article Writer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Images — Wikimedia Commons (3–5)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Article Writer": {
+      "main": [
+        [
+          {
+            "node": "SEO + QA Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEO + QA Agent": {
+      "main": [
+        [
+          {
+            "node": "Affiliate Selector + UTM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Affiliate Selector + UTM": {
+      "main": [
+        [
+          {
+            "node": "Merge article + affiliate + images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Images — Wikimedia Commons (3–5)": {
+      "main": [
+        [
+          {
+            "node": "Merge article + affiliate + images",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge article + affiliate + images": {
+      "main": [
+        [
+          {
+            "node": "Build article package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build article package": {
+      "main": [
+        [
+          {
+            "node": "Supabase — save draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase — save draft": {
+      "main": [
+        [
+          {
+            "node": "Approval preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval preview": {
+      "main": [
+        [
+          {
+            "node": "Telegram — approval request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger — commands": {
+      "main": [
+        [
+          {
+            "node": "Parse command + auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse command + auth": {
+      "main": [
+        [
+          {
+            "node": "Supabase — get article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase — get article": {
+      "main": [
+        [
+          {
+            "node": "Approve / reject / revise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve / reject / revise": {
+      "main": [
+        [
+          {
+            "node": "Supabase — update status",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Telegram result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase — update status": {
+      "main": [
+        [
+          {
+            "node": "IF — only if approved1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Telegram result": {
+      "main": [
+        [
+          {
+            "node": "Telegram — result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule — daily maintenance": {
+      "main": [
+        [
+          {
+            "node": "Supabase — published articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase — published articles": {
+      "main": [
+        [
+          {
+            "node": "Performance Analyst + rewrite decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Performance Analyst + rewrite decision": {
+      "main": [
+        [
+          {
+            "node": "Parse maintenance decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse maintenance decision": {
+      "main": [
+        [
+          {
+            "node": "Supabase — save metrics decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase — save metrics decision": {
+      "main": [
+        [
+          {
+            "node": "Crosspost — external webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}

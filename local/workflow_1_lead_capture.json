@@ -1,0 +1,116 @@
+{
+  "name": "СТЕНД 1 — Заявка с Tilda в Telegram + Google Таблица",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-lead",
+      "name": "Webhook — форма Tilda",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-640, 0],
+      "webhookId": "stand-lead-capture"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "a1", "name": "tg_token", "value": "PASTE_BOT_TOKEN", "type": "string"},
+            {"id": "a2", "name": "tg_chat_id", "value": "PASTE_CHAT_ID", "type": "string"},
+            {"id": "a3", "name": "sheet_id", "value": "PASTE_GOOGLE_SHEET_ID", "type": "string"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "cfg",
+      "name": "Config — сюда вставить токены",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-420, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tilda шлёт поля формы в body. Имена полей задаются в самой форме.\n// Забираем и то, что может прийти из обычного fetch (JSON).\nconst wh = $('Webhook — форма Tilda').first().json;\nconst b = wh.body || {};\n\nconst pick = (...keys) => {\n  for (const k of keys) {\n    const hit = Object.keys(b).find(x => x.toLowerCase() === k.toLowerCase());\n    if (hit && String(b[hit]).trim()) return String(b[hit]).trim();\n  }\n  return '';\n};\n\nconst name    = pick('name', 'Name', 'имя', 'fio') || 'Без имени';\nconst phone   = pick('phone', 'Phone', 'tel', 'телефон');\nconst email   = pick('email', 'Email', 'почта');\nconst comment = pick('comment', 'message', 'text', 'комментарий', 'задача');\nconst form    = pick('formname', 'formid', 'form') || 'Форма на сайте';\nconst page    = pick('page', 'referer', 'url') || wh.headers?.referer || '';\n\n// id заявки — по нему потом находим строку в таблице при нажатии кнопки\nconst lead_id = 'L' + Date.now().toString(36).toUpperCase();\n\nconst ts = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });\n\n// Телефон в тексте Telegram делает кликабельным сам — набор в один тап\nconst lines = [\n  '🔥 <b>Новая заявка</b>',\n  '',\n  `<b>Имя:</b> ${name}`,\n  phone   ? `<b>Телефон:</b> ${phone}` : null,\n  email   ? `<b>Email:</b> ${email}` : null,\n  comment ? `<b>Комментарий:</b> ${comment}` : null,\n  '',\n  `<i>${form} · ${ts} МСК · ${lead_id}</i>`\n].filter(Boolean);\n\nconst digits = phone.replace(/\\D/g, '');\n\nreturn [{ json: { lead_id, name, phone, email, comment, form, page, ts, digits, text: lines.join('\\n') } }];"
+      },
+      "id": "norm",
+      "name": "Разобрать заявку",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-200, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $('Config — сюда вставить токены').first().json.tg_token }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  chat_id: $('Config — сюда вставить токены').first().json.tg_chat_id,\n  text: $json.text,\n  parse_mode: 'HTML',\n  reply_markup: {\n    inline_keyboard: [\n      [\n        { text: '✅ Взял в работу', callback_data: 'work|' + $json.lead_id },\n        { text: '💤 Позже',        callback_data: 'later|' + $json.lead_id }\n      ],\n      [\n        { text: '❌ Отказ', callback_data: 'deny|' + $json.lead_id }\n      ],\n      ...($json.digits ? [[\n        { text: '💬 Написать в WhatsApp', url: 'https://wa.me/' + $json.digits }\n      ]] : [])\n    ]\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "tg-send",
+      "name": "Telegram — дежурному менеджеру",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [40, -100]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config — сюда вставить токены').first().json.sheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {"__rl": true, "value": "Лист1", "mode": "name"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $json.lead_id }}",
+            "Дата": "={{ $json.ts }}",
+            "Имя": "={{ $json.name }}",
+            "Телефон": "={{ $json.phone }}",
+            "Email": "={{ $json.email }}",
+            "Комментарий": "={{ $json.comment }}",
+            "Источник": "={{ $json.form }}",
+            "Статус": "Новая"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "gs-append",
+      "name": "Google Таблица — строка",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [40, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, lead_id: $('Разобрать заявку').first().json.lead_id }) }}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Ответ сайту",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [320, 0]
+    }
+  ],
+  "connections": {
+    "Webhook — форма Tilda": {"main": [[{"node": "Config — сюда вставить токены", "type": "main", "index": 0}]]},
+    "Config — сюда вставить токены": {"main": [[{"node": "Разобрать заявку", "type": "main", "index": 0}]]},
+    "Разобрать заявку": {"main": [[
+      {"node": "Telegram — дежурному менеджеру", "type": "main", "index": 0},
+      {"node": "Google Таблица — строка", "type": "main", "index": 0}
+    ]]},
+    "Telegram — дежурному менеджеру": {"main": [[{"node": "Ответ сайту", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"},
+  "pinData": {}
+}
